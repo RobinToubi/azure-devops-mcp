@@ -12,7 +12,7 @@ const ADVSEC_TOOLS = {
   get_alert_details: "advsec_get_alert_details",
 };
 
-function configureAdvSecTools(server: McpServer, _: () => Promise<string>, connectionProvider: () => Promise<WebApi>) {
+function configureAdvSecTools(server: McpServer, authHeaderProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>) {
   server.tool(
     ADVSEC_TOOLS.get_alerts,
     "Retrieve Advanced Security alerts for a repository. Results are scoped to the specified project and repository. Branch filters (onlyDefaultBranch, ref) apply only to code, dependency, and license alerts; they are not applicable to secret alerts and are ignored by the service, so they neither include nor exclude secrets. To narrow secret alerts by confidence, pass a single 'confidenceLevels' value ('High' or 'Other'); selecting every level is treated as no confidence filter.",

@@ -198,11 +198,17 @@ We recommend that you always enable `core` tools so that you can fetch project l
 
 > By default all domains are loaded
 
-## 🐥 Project and Team Defaults (local)
+## 🏢 Azure DevOps Server (On-Premise) Support
 
-You can also configure default Azure DevOps project and team values from `.vscode/mcp.json` using `project` and `team`, so tools can skip selection prompts.
+The Azure DevOps MCP Server supports self-hosted instances of **Azure DevOps Server 2022**.
 
-### Example `.vscode/mcp.json`
+To connect to a Server instance:
+
+1. Use the `--url` (or `-u`) argument to specify your full collection URL.
+2. Use the `--authentication pat` (or `envvar`) argument and set the `ADO_MCP_AUTH_TOKEN` environment variable with your Personal Access Token.
+3. (Optional) Use `--api-version` (or `-v`) to target a specific REST API version (defaults to `7.2-preview.1`).
+
+Example `mcp.json` for Azure DevOps Server:
 
 ```json
 {

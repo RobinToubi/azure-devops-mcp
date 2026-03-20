@@ -64,6 +64,7 @@ function getArtifactLinkAttributeName(linkType: string): string {
 
 function configureWorkItemTools(server: McpServer, tokenProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string) {
   // --- wit_work_item ----------------------------------------------------------
+function configureWorkItemTools(server: McpServer, authHeaderProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string) {
   server.tool(
     WORKITEM_TOOLS.wit_work_item,
     "Retrieve work item data for a project. Use the action parameter to specify the operation.",
