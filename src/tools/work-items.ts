@@ -69,7 +69,7 @@ function getLinkTypeFromName(name: string) {
   }
 }
 
-function configureWorkItemTools(server: McpServer, tokenProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string) {
+function configureWorkItemTools(server: McpServer, authHeaderProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string) {
   server.tool(
     WORKITEM_TOOLS.list_backlogs,
     "Receive a list of backlogs for a given project and team. If a project or team is not specified, you will be prompted to select one.",
@@ -372,7 +372,7 @@ function configureWorkItemTools(server: McpServer, tokenProvider: () => Promise<
         }
 
         const orgUrl = connection.serverUrl;
-        const accessToken = await tokenProvider();
+        const accessToken = await authHeaderProvider();
 
         const body = {
           text: comment,
@@ -433,7 +433,7 @@ function configureWorkItemTools(server: McpServer, tokenProvider: () => Promise<
         }
 
         const orgUrl = connection.serverUrl;
-        const accessToken = await tokenProvider();
+        const accessToken = await authHeaderProvider();
         const body: Record<string, string> = { text };
         const formatParameter = (format ?? "Markdown") === "Markdown" ? 0 : 1;
 
@@ -568,7 +568,7 @@ function configureWorkItemTools(server: McpServer, tokenProvider: () => Promise<
         }
 
         const orgUrl = connection.serverUrl;
-        const accessToken = await tokenProvider();
+        const accessToken = await authHeaderProvider();
 
         if (items.length > 50) {
           return {
@@ -654,7 +654,7 @@ function configureWorkItemTools(server: McpServer, tokenProvider: () => Promise<
         const response = await fetch(`${orgUrl}/_apis/wit/$batch?api-version=${batchApiVersion}`, {
           method: "PATCH",
           headers: {
-            "Authorization": `Bearer ${accessToken}`,
+            "Authorization": accessToken,
             "Content-Type": "application/json",
             "User-Agent": userAgentProvider(),
           },
@@ -1042,7 +1042,7 @@ function configureWorkItemTools(server: McpServer, tokenProvider: () => Promise<
       try {
         const connection = await connectionProvider();
         const orgUrl = connection.serverUrl;
-        const accessToken = await tokenProvider();
+        const accessToken = await authHeaderProvider();
 
         // Extract unique IDs from the updates array
         const uniqueIds = Array.from(new Set(updates.map((update) => update.id)));
@@ -1079,7 +1079,7 @@ function configureWorkItemTools(server: McpServer, tokenProvider: () => Promise<
         const response = await fetch(`${orgUrl}/_apis/wit/$batch?api-version=${batchApiVersion}`, {
           method: "PATCH",
           headers: {
-            "Authorization": `Bearer ${accessToken}`,
+            "Authorization": accessToken,
             "Content-Type": "application/json",
             "User-Agent": userAgentProvider(),
           },
@@ -1138,7 +1138,7 @@ function configureWorkItemTools(server: McpServer, tokenProvider: () => Promise<
         }
 
         const orgUrl = connection.serverUrl;
-        const accessToken = await tokenProvider();
+        const accessToken = await authHeaderProvider();
 
         // Extract unique IDs from the updates array
         const uniqueIds = Array.from(new Set(updates.map((update) => update.id)));
@@ -1167,7 +1167,7 @@ function configureWorkItemTools(server: McpServer, tokenProvider: () => Promise<
         const response = await fetch(`${orgUrl}/_apis/wit/$batch?api-version=${batchApiVersion}`, {
           method: "PATCH",
           headers: {
-            "Authorization": `Bearer ${accessToken}`,
+            "Authorization": accessToken,
             "Content-Type": "application/json",
             "User-Agent": userAgentProvider(),
           },
