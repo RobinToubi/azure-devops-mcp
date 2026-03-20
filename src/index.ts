@@ -9,7 +9,7 @@ import { getBearerHandler, getPersonalAccessTokenHandler, WebApi } from "azure-d
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 
-import { createAuthenticator } from "./auth.js";
+import { createAuthenticator, getAuthorizationHeader } from "./auth.js";
 import { logger } from "./logger.js";
 import { getOrgTenant } from "./org-tenants.js";
 //import { configurePrompts } from "./prompts.js";
@@ -17,6 +17,8 @@ import { configureAllTools } from "./tools.js";
 import { UserAgentComposer } from "./useragent.js";
 import { packageVersion } from "./version.js";
 import { DomainsManager } from "./shared/domains.js";
+import { setApiVersions } from "./utils.js";
+import { setConfig } from "./config.js";
 
 function isGitHubCodespaceEnv(): boolean {
   return process.env.CODESPACES === "true" && !!process.env.CODESPACE_NAME;
@@ -55,11 +57,26 @@ const argv = yargs(hideBin(process.argv))
     describe: "Azure tenant ID (optional, applied when using 'interactive' and 'azcli' type of authentication)",
     type: "string",
   })
+  .option("url", {
+    alias: "u",
+    describe: "Custom Azure DevOps base URL (e.g. https://tfs.contoso.com/tfs/DefaultCollection)",
+    type: "string",
+  })
+  .option("api-version", {
+    alias: "v",
+    describe: "Azure DevOps REST API version (defaults to 7.2-preview.1)",
+    type: "string",
+  })
   .help()
   .parseSync();
 
-export const orgName = argv.organization as string;
-const orgUrl = "https://dev.azure.com/" + orgName;
+const name = argv.organization as string;
+const url = (argv.url as string) || "https://dev.azure.com/" + name;
+const custom = !!argv.url;
+
+setConfig(name, url, custom);
+
+export { name as orgName, url as orgUrl, custom as isCustomUrl };
 
 const domainsManager = new DomainsManager(argv.domains);
 export const enabledDomains = domainsManager.getEnabledDomains();
@@ -80,9 +97,13 @@ function getAzureDevOpsClient(getAzureDevOpsToken: () => Promise<string>, userAg
 }
 
 async function main() {
+  if (argv["api-version"]) {
+    setApiVersions(argv["api-version"] as string);
+  }
+
   logger.info("Starting Azure DevOps MCP Server", {
-    organization: orgName,
-    organizationUrl: orgUrl,
+    organization: name,
+    organizationUrl: url,
     authentication: argv.authentication,
     tenant: argv.tenant,
     domains: argv.domains,
@@ -105,8 +126,14 @@ async function main() {
   server.server.oninitialized = () => {
     userAgentComposer.appendMcpClientInfo(server.server.getClientVersion());
   };
-  const tenantId = (await getOrgTenant(orgName)) ?? argv.tenant;
-  const authenticator = createAuthenticator(argv.authentication, tenantId);
+  const tenantId = (await getOrgTenant(name)) ?? (argv.tenant as string);
+  const authenticator = createAuthenticator(argv.authentication as string, tenantId);
+
+  // Define a provider that returns the full Authorization header
+  const authHeaderProvider = async () => {
+    const token = await authenticator();
+    return getAuthorizationHeader(argv.authentication as string, token);
+  };
 
   if (argv.authentication === "pat") {
     const basicValue = await authenticator();
@@ -128,7 +155,7 @@ async function main() {
   // removing prompts untill further notice
   // configurePrompts(server);
 
-  configureAllTools(server, authenticator, getAzureDevOpsClient(authenticator, userAgentComposer, argv.authentication), () => userAgentComposer.userAgent, enabledDomains);
+  configureAllTools(server, authHeaderProvider, getAzureDevOpsClient(authenticator, userAgentComposer), () => userAgentComposer.userAgent, enabledDomains);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

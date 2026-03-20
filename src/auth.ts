@@ -136,4 +136,11 @@ function createAuthenticator(type: string, tenantId?: string): () => Promise<str
       };
   }
 }
-export { createAuthenticator };
+function getAuthorizationHeader(type: string, token: string): string {
+  if (type === "pat" || type === "envvar") {
+    return `Basic ${Buffer.from(`:${token}`).toString("base64")}`;
+  }
+  return `Bearer ${token}`;
+}
+
+export { createAuthenticator, getAuthorizationHeader };

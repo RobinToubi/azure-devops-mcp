@@ -29,7 +29,7 @@ const PIPELINE_TOOLS = {
   pipelines_download_artifact: "pipelines_download_artifact",
 };
 
-function configurePipelineTools(server: McpServer, tokenProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string) {
+function configurePipelineTools(server: McpServer, authHeaderProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string) {
   server.tool(
     PIPELINE_TOOLS.pipelines_get_build_definitions,
     "Retrieves a list of build definitions for a given project.",
@@ -517,7 +517,7 @@ function configurePipelineTools(server: McpServer, tokenProvider: () => Promise<
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}`,
+          "Authorization": authHeader,
           "User-Agent": userAgentProvider(),
         },
         body: JSON.stringify(body),
