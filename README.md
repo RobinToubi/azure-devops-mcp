@@ -151,7 +151,35 @@ Open GitHub Copilot Chat and try a prompt like `List ADO projects`. The first ti
 
 See the [getting started documentation](./docs/GETTINGSTARTED.md) to use our MCP Server with other tools such as Visual Studio 2022, Claude Code, and Cursor.
 
-## 🌏 Using Domains
+#### 🐳 Install with Docker
+
+You can also run the Azure DevOps MCP Server using Docker. This is a great option if you want to avoid installing Node.js locally or need a consistent environment.
+
+##### Steps
+
+1. **Build the image**:
+
+   ```bash
+   docker build -t azure-devops-mcp .
+   ```
+
+2. **Run the container**:
+   Pass your Azure DevOps organization and any required arguments. For example:
+
+   ```bash
+   docker run -i --rm azure-devops-mcp <your-org-name>
+   ```
+
+   To use a Personal Access Token (PAT) with Azure DevOps Server:
+
+   ```bash
+   docker run -i --rm -e ADO_MCP_AUTH_TOKEN=<your-pat> azure-devops-mcp DefaultCollection --url <your-collection-url> --authentication pat
+   ```
+
+> [!NOTE]
+> The `-i` flag is required for `stdio` communication with the MCP host.
+
+#### 🌏 Using Domains
 
 Azure DevOps exposes a large surface area. As a result, our Azure DevOps MCP Server includes many tools. To keep the toolset manageable, avoid confusing the model, and respect client limits on loaded tools, use Domains to load only the areas you need. Domains are named groups of related tools (for example: core, work, work-items, repositories, wiki). Add the `-d` argument and the domain names to the server args in your `mcp.json` to list the domains to enable.
 
