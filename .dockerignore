@@ -1,0 +1,18 @@
+.git
+node_modules
+test
+coverage
+dist
+.vscode
+.gemini
+.github
+.azuredevops
+.husky
+.claude
+.opencode
+openspec
+*.md
+eslint.config.mjs
+jest.config.cjs
+tsconfig.jest.json
+# Do not ignore package.json or package-lock.json as they are needed for npm install
