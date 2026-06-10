@@ -87,12 +87,23 @@ function getAzureDevOpsClient(getAzureDevOpsToken: () => Promise<string>, userAg
     const accessToken = await getAzureDevOpsToken();
     // For pat, accessToken is base64("{email}:{token}"). Decode to extract the token part,
     // since getPersonalAccessTokenHandler prepends ":" internally and just needs the raw token.
-    const authHandler = authType === "pat" ? getPersonalAccessTokenHandler(Buffer.from(accessToken, "base64").toString("utf8").split(":").slice(1).join(":")) : getBearerHandler(accessToken);
-    const connection = new WebApi(url, authHandler, undefined, {
-      productName: "AzureDevOps.MCP",
-      productVersion: packageVersion,
-      userAgent: userAgentComposer.userAgent,
-    });
+    // For envvar, accessToken is a raw PAT — pass directly to getPersonalAccessTokenHandler.
+    const authHandler =
+      authType === "pat"
+        ? getPersonalAccessTokenHandler(Buffer.from(accessToken, "base64").toString("utf8").split(":").slice(1).join(":"))
+        : authType === "envvar"
+          ? getPersonalAccessTokenHandler(accessToken)
+          : getBearerHandler(accessToken);
+    const connection = new WebApi(
+      url,
+      authHandler,
+      { ignoreSslError: insecure },
+      {
+        productName: "AzureDevOps.MCP",
+        productVersion: packageVersion,
+        userAgent: userAgentComposer.userAgent,
+      }
+    );
     return connection;
   };
 }
@@ -130,7 +141,8 @@ async function main() {
   const tenantId = (await getOrgTenant(name)) ?? (argv.tenant as string);
   const authenticator = createAuthenticator(argv.authentication as string, tenantId);
 
-  // Define a provider that returns the full Authorization header
+  // Wrap authenticator to return a fully-formatted Authorization header value
+  // (e.g. "Bearer <token>" or "Basic <b64>") for use in raw fetch calls.
   const authHeaderProvider = async () => {
     const token = await authenticator();
     return getAuthorizationHeader(argv.authentication as string, token);

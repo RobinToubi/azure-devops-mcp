@@ -23,6 +23,7 @@ function configureAllTools(server: McpServer, authHeaderProvider: () => Promise<
     }
   };
 
+  configureIfDomainEnabled(Domain.MCP_APPS, () => configureMcpAppsTools(server));
   configureIfDomainEnabled(Domain.CORE, () => configureCoreTools(server, authHeaderProvider, connectionProvider, userAgentProvider));
   configureIfDomainEnabled(Domain.WORK, () => configureWorkTools(server, authHeaderProvider, connectionProvider));
   configureIfDomainEnabled(Domain.PIPELINES, () => configurePipelineTools(server, authHeaderProvider, connectionProvider, userAgentProvider));
