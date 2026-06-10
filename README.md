@@ -167,8 +167,6 @@ Open GitHub Copilot Chat and try a prompt like `List ADO projects`. The first ti
 
 See the [getting started documentation](./docs/GETTINGSTARTED.md) to use our MCP Server with other tools such as Visual Studio 2022, Codex, Claude Code, and Cursor.
 
-## 🌏 Using Domains (local)
-
 #### 🐳 Install with Docker
 
 You can also run the Azure DevOps MCP Server using Docker. This is a great option if you want to avoid installing Node.js locally or need a consistent environment.
