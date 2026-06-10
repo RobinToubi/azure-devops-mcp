@@ -136,8 +136,14 @@ function createAuthenticator(type: string, tenantId?: string): () => Promise<str
       };
   }
 }
+
 function getAuthorizationHeader(type: string, token: string): string {
-  if (type === "pat" || type === "envvar") {
+  if (type === "pat") {
+    // token is already base64("email:token") — use directly as Basic credential
+    return `Basic ${token}`;
+  }
+  if (type === "envvar") {
+    // token is a raw PAT — encode it for Basic auth
     return `Basic ${Buffer.from(`:${token}`).toString("base64")}`;
   }
   return `Bearer ${token}`;
