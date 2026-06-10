@@ -506,7 +506,7 @@ function configurePipelineTools(server: McpServer, authHeaderProvider: () => Pro
       const connection = await connectionProvider();
       const orgUrl = connection.serverUrl;
       const endpoint = `${orgUrl}/${encodeURIComponent(project)}/_apis/build/builds/${buildId}/stages/${encodeURIComponent(stageName)}?api-version=${apiVersion}`;
-      const token = await tokenProvider();
+      const authHeader = await authHeaderProvider();
 
       const body = {
         forceRetryAllJobs: forceRetryAllJobs,

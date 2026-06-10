@@ -19,7 +19,6 @@ import { packageVersion } from "./version.js";
 import { DomainsManager } from "./shared/domains.js";
 import { setApiVersions } from "./utils.js";
 import { setConfig } from "./config.js";
-import { ar } from "zod/v4/locales";
 
 function isGitHubCodespaceEnv(): boolean {
   return process.env.CODESPACES === "true" && !!process.env.CODESPACE_NAME;
@@ -89,7 +88,7 @@ function getAzureDevOpsClient(getAzureDevOpsToken: () => Promise<string>, userAg
     // For pat, accessToken is base64("{email}:{token}"). Decode to extract the token part,
     // since getPersonalAccessTokenHandler prepends ":" internally and just needs the raw token.
     const authHandler = authType === "pat" ? getPersonalAccessTokenHandler(Buffer.from(accessToken, "base64").toString("utf8").split(":").slice(1).join(":")) : getBearerHandler(accessToken);
-    const connection = new WebApi(orgUrl, authHandler, undefined, {
+    const connection = new WebApi(url, authHandler, undefined, {
       productName: "AzureDevOps.MCP",
       productVersion: packageVersion,
       userAgent: userAgentComposer.userAgent,
@@ -157,7 +156,7 @@ async function main() {
   // removing prompts untill further notice
   // configurePrompts(server);
 
-  configureAllTools(server, authHeaderProvider, getAzureDevOpsClient(authenticator, userAgentComposer), () => userAgentComposer.userAgent, enabledDomains);
+  configureAllTools(server, authHeaderProvider, getAzureDevOpsClient(authenticator, userAgentComposer, argv.authentication), () => userAgentComposer.userAgent, enabledDomains);
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
