@@ -149,4 +149,9 @@ function getAuthorizationHeader(type: string, token: string): string {
   return `Bearer ${token}`;
 }
 
-export { createAuthenticator, getAuthorizationHeader };
+function createPatAuthHeaderProvider(rawPat: string): () => Promise<string> {
+  const header = `Basic ${Buffer.from(`:${rawPat}`).toString("base64")}`;
+  return async () => header;
+}
+
+export { createAuthenticator, getAuthorizationHeader, createPatAuthHeaderProvider };

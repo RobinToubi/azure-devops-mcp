@@ -54,5 +54,6 @@ module.exports = {
     "^(.+)/elicitations\\.js$": "$1/elicitations.ts",
     "^(.+)/content-safety\\.js$": "$1/content-safety.ts",
     "^(.+)/config\\.js$": "$1/config.ts",
+    "^(.+)/http-server\\.js$": "$1/http-server.ts",
   },
 };
