@@ -25,7 +25,32 @@ jest.mock("@azure/msal-node", () => ({
 
 jest.mock("open", () => jest.fn());
 
-import { createAuthenticator } from "../../src/auth";
+import { createAuthenticator, createPatAuthHeaderProvider } from "../../src/auth";
+
+describe("createPatAuthHeaderProvider", () => {
+  it("returns Basic auth header with base64(:rawPat) encoding", async () => {
+    const rawPat = "mytoken";
+    const expected = `Basic ${Buffer.from(`:${rawPat}`).toString("base64")}`;
+
+    const provider = createPatAuthHeaderProvider(rawPat);
+    const result = await provider();
+
+    expect(result).toBe(expected);
+  });
+
+  it("returns the same value on repeated calls (header is cached)", async () => {
+    const provider = createPatAuthHeaderProvider("stable-token");
+    const first = await provider();
+    const second = await provider();
+    expect(first).toBe(second);
+  });
+
+  it("encodes an empty PAT without throwing", async () => {
+    const provider = createPatAuthHeaderProvider("");
+    const result = await provider();
+    expect(result).toBe(`Basic ${Buffer.from(":").toString("base64")}`);
+  });
+});
 
 describe("PAT authentication", () => {
   const originalEnv = process.env;
