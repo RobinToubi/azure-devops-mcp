@@ -1,0 +1,33 @@
+services:
+  azure-devops-mcp:
+    build: .
+    image: azure-devops-mcp:beta-http
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      # Required: Azure DevOps organization name (e.g. "myorg" from dev.azure.com/myorg)
+      AZURE_DEVOPS_ORG: ${AZURE_DEVOPS_ORG}
+      # Optional: custom base URL for on-premises TFS/Azure DevOps Server
+      AZURE_DEVOPS_URL: ${AZURE_DEVOPS_URL:-}
+      # Auth type: request | envvar | pat | azcli | interactive (default: request)
+      AUTHENTICATION: ${AUTHENTICATION:-envvar}
+      # PAT token — required when AUTHENTICATION=envvar
+      ADO_MCP_AUTH_TOKEN: ${ADO_MCP_AUTH_TOKEN:-}
+      PORT: "3000"
+      HOST: "0.0.0.0"
+      # Set to any non-empty value to disable SSL certificate verification (for self-signed certs)
+      INSECURE: ${INSECURE:-}
+      # Azure tenant ID — required for interactive/azcli auth on multi-tenant environments
+      TENANT: ${TENANT:-}
+      # Override Azure DevOps REST API version (e.g. "7.1", default: 7.2-preview.1)
+      API_VERSION: ${API_VERSION:-}
+      # Space-separated list of domains to enable (default: all)
+      # Available: repositories builds work testplans wiki search security
+      DOMAINS: ${DOMAINS:-}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/mcp', r => process.exit(r.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
