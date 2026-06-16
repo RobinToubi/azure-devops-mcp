@@ -5,11 +5,12 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { startHttpServer } from "./http-server.js";
 import { getBearerHandler, getPersonalAccessTokenHandler, WebApi } from "azure-devops-node-api";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 
-import { createAuthenticator, getAuthorizationHeader } from "./auth.js";
+import { createAuthenticator, getAuthorizationHeader, createPatAuthHeaderProvider } from "./auth.js";
 import { logger } from "./logger.js";
 import { getOrgTenant } from "./org-tenants.js";
 //import { configurePrompts } from "./prompts.js";
@@ -49,8 +50,8 @@ const argv = yargs(hideBin(process.argv))
     alias: "a",
     describe: "Type of authentication to use",
     type: "string",
-    choices: ["interactive", "azcli", "env", "envvar", "pat"],
-    default: defaultAuthenticationType,
+    choices: ["interactive", "azcli", "env", "envvar", "pat", "request"],
+    default: "pat",
   })
   .option("tenant", {
     alias: "t",
@@ -61,11 +62,34 @@ const argv = yargs(hideBin(process.argv))
     alias: "u",
     describe: "Custom Azure DevOps base URL (e.g. https://tfs.contoso.com/tfs/DefaultCollection)",
     type: "string",
+    default: "https://vmproddevops.val.local/tfs/DefaultCollection",
+  })
+  .option("insecure", {
+    describe: "Disable SSL certificate verification (for on-premises servers with self-signed certificates)",
+    type: "boolean",
+    default: false,
   })
   .option("api-version", {
     alias: "v",
     describe: "Azure DevOps REST API version (defaults to 7.2-preview.1)",
     type: "string",
+  })
+  .option("transport", {
+    describe: "Transport to use: 'stdio' (default) or 'http' (Streamable HTTP server)",
+    type: "string",
+    choices: ["stdio", "http"],
+    default: "stdio",
+  })
+  .option("port", {
+    alias: "p",
+    describe: "Port to listen on when using HTTP transport (default: 3000)",
+    type: "number",
+    default: 3000,
+  })
+  .option("host", {
+    describe: "Host to bind to when using HTTP transport (default: localhost)",
+    type: "string",
+    default: "localhost",
   })
   .help()
   .parseSync();
@@ -108,9 +132,30 @@ function getAzureDevOpsClient(getAzureDevOpsToken: () => Promise<string>, userAg
   };
 }
 
+function buildMcpServer(userAgentComposer: UserAgentComposer, authHeaderProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>): McpServer {
+  const server = new McpServer({
+    name: "Azure DevOps MCP Server",
+    version: packageVersion,
+    icons: [{ src: "https://cdn.vsassets.io/content/icons/favicon.ico" }],
+  });
+  server.server.oninitialized = () => {
+    userAgentComposer.appendMcpClientInfo(server.server.getClientVersion());
+  };
+  // removing prompts until further notice
+  // configurePrompts(server);
+  configureAllTools(server, authHeaderProvider, connectionProvider, () => userAgentComposer.userAgent, enabledDomains);
+  return server;
+}
+
 async function main() {
   if (argv["api-version"]) {
     setApiVersions(argv["api-version"] as string);
+  }
+
+  // --authentication request is only meaningful with HTTP transport.
+  if (argv.authentication === "request" && argv.transport !== "http") {
+    logger.error("--authentication request requires --transport http. Use --transport http or choose a different authentication type.");
+    process.exit(1);
   }
 
   logger.info("Starting Azure DevOps MCP Server", {
@@ -124,20 +169,27 @@ async function main() {
     isCodespace: isGitHubCodespaceEnv(),
   });
 
-  const server = new McpServer({
-    name: "Azure DevOps MCP Server",
-    version: packageVersion,
-    icons: [
-      {
-        src: "https://cdn.vsassets.io/content/icons/favicon.ico",
-      },
-    ],
-  });
-
   const userAgentComposer = new UserAgentComposer(packageVersion);
-  server.server.oninitialized = () => {
-    userAgentComposer.appendMcpClientInfo(server.server.getClientVersion());
-  };
+
+  if (argv.authentication === "request") {
+    // Per-session PAT mode: credentials come from the X-Azure-DevOps-PAT request header.
+    // No startup-time authenticator or env var is required.
+    const createServerForSession = (pat?: string) => {
+      const rawPat = pat ?? "";
+      const sessionAuthHeaderProvider = createPatAuthHeaderProvider(rawPat);
+      const sessionConnectionProvider = getAzureDevOpsClient(() => Promise.resolve(rawPat), userAgentComposer, "envvar");
+      return buildMcpServer(userAgentComposer, sessionAuthHeaderProvider, sessionConnectionProvider);
+    };
+    await startHttpServer({
+      port: argv.port as number,
+      host: argv.host as string,
+      createServerForSession,
+      requirePatHeader: true,
+    });
+    return;
+  }
+
+  // All other auth types resolve credentials at startup and share them across sessions.
   const tenantId = (await getOrgTenant(name)) ?? (argv.tenant as string);
   const authenticator = createAuthenticator(argv.authentication as string, tenantId);
 
@@ -167,11 +219,23 @@ async function main() {
 
   // removing prompts until further notice
   // configurePrompts(server);
+  const connectionProvider = getAzureDevOpsClient(authenticator, userAgentComposer, argv.authentication);
 
-  configureAllTools(server, authHeaderProvider, getAzureDevOpsClient(authenticator, userAgentComposer, argv.authentication), () => userAgentComposer.userAgent, enabledDomains);
+  // Factory used by both stdio (once) and HTTP (per session).
+  // In non-request auth modes the pat argument is ignored; startup-resolved credentials are used.
+  const createServerForSession = (_pat?: string) => buildMcpServer(userAgentComposer, authHeaderProvider, connectionProvider);
 
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
+  if (argv.transport === "http") {
+    await startHttpServer({
+      port: argv.port as number,
+      host: argv.host as string,
+      createServerForSession,
+    });
+  } else {
+    const server = createServerForSession();
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+  }
 }
 
 main().catch((error) => {

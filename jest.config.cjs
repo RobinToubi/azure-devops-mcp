@@ -56,5 +56,7 @@ module.exports = {
     "^(.+)/command\\.js$": "$1/command.ts",
     "^(.+)/pipelines\\.dto\\.js$": "$1/pipelines.dto.ts",
     "^(.+)/index\\.js$": "$1/index.ts",
+    "^(.+)/config\\.js$": "$1/config.ts",
+    "^(.+)/http-server\\.js$": "$1/http-server.ts",
   },
 };

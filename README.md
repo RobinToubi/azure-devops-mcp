@@ -226,6 +226,57 @@ We recommend that you always enable `core` tools so that you can fetch project l
 
 > By default all domains are loaded
 
+## 🌐 HTTP Transport (Streamable HTTP)
+
+By default the server uses `stdio` transport (subprocess mode). You can also run it as a standalone HTTP server using the [MCP 2025-11-25 Streamable HTTP transport](https://modelcontextprotocol.io/specification/2025-11-25/basic/transports#streamable-http), which allows multiple clients to connect without spawning a new process each time.
+
+### Starting the HTTP server
+
+```bash
+npx -y @azure-devops/mcp@latest <organization> --transport http --authentication envvar
+```
+
+Or if installed locally:
+
+```bash
+mcp-server-azuredevops <organization> --transport http --port 3000 --host 127.0.0.1
+```
+
+| Flag          | Default     | Description                        |
+| ------------- | ----------- | ---------------------------------- |
+| `--transport` | `stdio`     | `stdio` or `http`                  |
+| `--port`      | `3000`      | Port to listen on (HTTP mode only) |
+| `--host`      | `127.0.0.1` | Bind address (HTTP mode only)      |
+
+The MCP endpoint is available at `http://<host>:<port>/mcp`.
+
+### Authentication recommendations
+
+> [!IMPORTANT]
+> For HTTP deployments, use `--authentication envvar` (set `AZURE_DEVOPS_TOKEN` to a Personal Access Token) or `--authentication pat`. The `interactive` and `azcli` authentication modes open a browser popup on the first tool call, which may be unexpected in server deployments.
+
+### Client-provided PAT (`--authentication request`)
+
+Use `--authentication request` when you want each connecting client to supply its own Personal Access Token rather than sharing a single server-level credential. In this mode **no PAT environment variable is needed at startup** — the server reads the token from the `X-Azure-DevOps-PAT` HTTP header sent with each `InitializeRequest`.
+
+```bash
+mcp-server-azuredevops <organization> --transport http --authentication request
+```
+
+Each MCP client must include the header on every session initialisation:
+
+```
+X-Azure-DevOps-PAT: <your-personal-access-token>
+```
+
+> [!WARNING]
+> PATs travel in plain HTTP headers. **Always run behind TLS** (HTTPS) when using `--authentication request` in production, especially when binding to a non-localhost address.
+
+### Security notes
+
+- When binding to `127.0.0.1` (the default), DNS rebinding protection is automatically enabled.
+- Binding to `0.0.0.0` disables DNS rebinding protection — add a reverse proxy with authentication for public-facing deployments.
+
 ## 🏢 Azure DevOps Server (On-Premise) Support
 
 The Azure DevOps MCP Server supports self-hosted instances of **Azure DevOps Server 2022**.
