@@ -1,7 +1,7 @@
 services:
   azure-devops-mcp:
     build: .
-    image: azure-devops-mcp:beta-http
+    image: azure-devops-mcp:2.7.0
     ports:
       - "${PORT:-3000}:3000"
     environment:
