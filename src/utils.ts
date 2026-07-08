@@ -11,9 +11,12 @@ export let markdownCommentsApiVersion = "7.2-preview.4";
  */
 export function setApiVersions(version: string): void {
   apiVersion = version;
-  // If the user specifies a specific version, we might want to also adjust these,
-  // but for now let's just make them available for override if needed.
-  // Actually, usually batchApiVersion is fixed at 5.0 for compatibility.
+  // The work item comments resource area is preview-only: Azure DevOps (Server and Services)
+  // rejects a plain "X.Y" version for this endpoint with VssInvalidPreviewVersionException and
+  // requires the "-preview" suffix, even when the rest of the API is requested at a stable version.
+  markdownCommentsApiVersion = version.includes("preview") ? version : `${version}-preview`;
+  // batchApiVersion is left at 5.0 — the $batch endpoint has been stable at that
+  // version across both Azure DevOps Services and on-prem Server releases.
 }
 
 export function createEnumMapping<T extends Record<string, string | number>>(enumObject: T): Record<string, T[keyof T]> {
