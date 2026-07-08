@@ -384,7 +384,7 @@ function configureWorkItemTools(server: McpServer, authHeaderProvider: () => Pro
           {
             method: "POST",
             headers: {
-              "Authorization": `Bearer ${accessToken}`,
+              "Authorization": accessToken,
               "Content-Type": "application/json",
               "User-Agent": userAgentProvider(),
             },
@@ -442,7 +442,7 @@ function configureWorkItemTools(server: McpServer, authHeaderProvider: () => Pro
           {
             method: "PATCH",
             headers: {
-              "Authorization": `Bearer ${accessToken}`,
+              "Authorization": accessToken,
               "Content-Type": "application/json",
               "User-Agent": userAgentProvider(),
             },
