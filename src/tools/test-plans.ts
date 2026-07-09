@@ -37,7 +37,7 @@ function configureTestPlanTools(server: McpServer, tokenProvider: () => Promise<
         const accessToken = await tokenProvider();
 
         const headers: Record<string, string> = {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: accessToken,
         };
 
         const userAgent = userAgentProvider?.();
