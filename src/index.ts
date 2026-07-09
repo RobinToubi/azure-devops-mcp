@@ -51,7 +51,7 @@ const argv = yargs(hideBin(process.argv))
     describe: "Type of authentication to use",
     type: "string",
     choices: ["interactive", "azcli", "env", "envvar", "pat", "request"],
-    default: "pat",
+    default: defaultAuthenticationType,
   })
   .option("tenant", {
     alias: "t",
