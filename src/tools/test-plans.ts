@@ -39,7 +39,7 @@ function configureTestPlanTools(server: McpServer, tokenProvider: () => Promise<
         if (continuationToken) params.append("continuationToken", continuationToken);
         const url = `${connection.serverUrl}/${encodeURIComponent(project)}/_apis/testplan/Plans?${params.toString()}`;
         const headers: Record<string, string> = {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: accessToken,
         };
 
         const userAgent = userAgentProvider?.();
@@ -373,7 +373,7 @@ function configureTestPlanTools(server: McpServer, tokenProvider: () => Promise<
         if (continuationToken) params.append("continuationToken", continuationToken);
         const url = `${connection.serverUrl}/${encodeURIComponent(project)}/_apis/testplan/Plans/${planid}/Suites/${suiteid}/TestCase?${params.toString()}`;
         const headers: Record<string, string> = {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: accessToken,
         };
 
         const userAgent = userAgentProvider?.();
@@ -499,7 +499,7 @@ function configureTestPlanTools(server: McpServer, tokenProvider: () => Promise<
         if (continuationToken) params.append("continuationToken", continuationToken);
         const url = `${connection.serverUrl}/${encodeURIComponent(project)}/_apis/testplan/Plans/${planId}/Suites?${params.toString()}`;
         const headers: Record<string, string> = {
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: accessToken,
         };
 
         const userAgent = userAgentProvider?.();
