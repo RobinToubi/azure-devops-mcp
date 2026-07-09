@@ -1756,7 +1756,7 @@ function configureRepoTools(server: McpServer, authHeaderProvider: () => Promise
       top: z.coerce.number().default(10).describe("Maximum number of results to return"),
     },
     async ({ searchText, project, repository, branch, author, commitStartDate, commitEndDate, orderBy, includeFacets, skip, top }) => {
-      const accessToken = await tokenProvider();
+      const accessToken = await authHeaderProvider();
       const url = `https://almsearch.dev.azure.com/${orgName}/_apis/search/commitSearchResults?api-version=${apiVersion}`;
 
       const requestBody: Record<string, unknown> = {
@@ -1784,7 +1784,7 @@ function configureRepoTools(server: McpServer, authHeaderProvider: () => Promise
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${accessToken}`,
+          "Authorization": accessToken,
           "User-Agent": userAgentProvider(),
         },
         body: JSON.stringify(requestBody),
