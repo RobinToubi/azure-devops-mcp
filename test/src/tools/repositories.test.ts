@@ -6042,7 +6042,7 @@ describe("repos tools", () => {
         expect.stringContaining("commitSearchResults"),
         expect.objectContaining({
           method: "POST",
-          headers: expect.objectContaining({ Authorization: "Bearer fake-token" }),
+          headers: expect.objectContaining({ Authorization: "fake-token" }),
           body: expect.stringContaining('"filters":{}'),
         })
       );

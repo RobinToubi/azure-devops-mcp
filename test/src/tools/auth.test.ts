@@ -56,7 +56,7 @@ describe("auth functions", () => {
       expect(global.fetch).toHaveBeenCalledWith("https://dev.azure.com/test-org/_apis/connectionData", {
         method: "GET",
         headers: {
-          "Authorization": "Bearer fake-token",
+          "Authorization": "fake-token",
           "Content-Type": "application/json",
           "User-Agent": "Jest",
         },
@@ -117,7 +117,7 @@ describe("auth functions", () => {
 
       expect(global.fetch).toHaveBeenCalledWith("https://vssps.dev.azure.com/test-org/_apis/identities?api-version=7.2-preview.1&searchFilter=General&filterValue=john.doe%40example.com", {
         headers: {
-          "Authorization": "Bearer fake-token",
+          "Authorization": "fake-token",
           "Content-Type": "application/json",
           "User-Agent": "Jest",
         },
@@ -189,7 +189,7 @@ describe("auth functions", () => {
 
       expect(global.fetch).toHaveBeenCalledWith("https://vssps.dev.azure.com/test-org/_apis/identities?api-version=7.2-preview.1&searchFilter=General&filterValue=john.doe%40example.com", {
         headers: {
-          "Authorization": "Bearer fake-token",
+          "Authorization": "fake-token",
           "Content-Type": "application/json",
           "User-Agent": "Jest",
         },

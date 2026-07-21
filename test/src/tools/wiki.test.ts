@@ -1638,7 +1638,7 @@ describe("configureWikiTools", () => {
       expect(mockFetch).toHaveBeenNthCalledWith(2, expect.stringContaining("pages?path="), {
         method: "PUT",
         headers: {
-          "Authorization": "Bearer test-token",
+          "Authorization": "test-token",
           "Content-Type": "application/json",
           "If-Match": 'W/"provided-etag"',
           "User-Agent": "Jest",
