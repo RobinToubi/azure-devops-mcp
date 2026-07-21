@@ -133,7 +133,7 @@ const PIPELINE_TOOLS = {
   pipelines_write: "pipelines_write",
 };
 
-function configurePipelineTools(server: McpServer, authHeaderProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string) {
+function configurePipelineTools(server: McpServer, tokenProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string) {
   server.tool(
     PIPELINE_TOOLS.pipelines_build,
     "Retrieve build data for a project. Use the action parameter to specify the operation.",

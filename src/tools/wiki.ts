@@ -13,7 +13,7 @@ const WIKI_TOOLS = {
   wiki_upsert_page: "wiki_upsert_page",
 };
 
-function configureWikiTools(server: McpServer, authHeaderProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string) {
+function configureWikiTools(server: McpServer, tokenProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string) {
   server.tool(
     WIKI_TOOLS.wiki,
     "Retrieve wiki data for an organization or project. Use the action parameter to specify the operation.",
@@ -281,7 +281,7 @@ function configureWikiTools(server: McpServer, authHeaderProvider: () => Promise
     async ({ wikiIdentifier, path, content, project, etag, branch = "wikiMaster" }) => {
       try {
         const connection = await connectionProvider();
-        const accessToken = await authHeaderProvider();
+        const accessToken = await tokenProvider();
 
         // Normalize the path
         const normalizedPath = path.startsWith("/") ? path : `/${path}`;
