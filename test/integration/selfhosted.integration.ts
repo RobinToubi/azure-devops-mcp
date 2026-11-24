@@ -149,7 +149,7 @@ function runReadOnlyChecks(connect: () => Promise<Client>) {
 
   it("runs a project-scoped WIQL query and reads a work item (api 7.2)", async () => {
     const wiql = `SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = '${project.replace(/'/g, "''")}' ORDER BY [System.ChangedDate] DESC`;
-    const query = await ado.call("wit_query", { action: "wiql", project, query: wiql, top: 3 });
+    const query = await ado.call("wit_query", { action: "wiql", project, wiql, top: 3 });
     expect(query.isError).toBeFalsy();
 
     const id = /"id"\s*:\s*(\d+)/.exec(textOf(query))?.[1];
