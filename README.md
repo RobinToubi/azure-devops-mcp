@@ -263,16 +263,17 @@ ADO_MCP_AUTH_TOKEN=<raw-pat> mcp-server-azuredevops DefaultCollection \
 
 ### Testing against a self-hosted instance
 
-Unit tests (`npm test`) never reach the network. Integration tests that call a real Azure DevOps Server (stdio and HTTP streamable) are opt-in:
+Unit tests (`npm test`) never reach the network. Integration tests that call a real Azure DevOps Server (stdio and HTTP streamable) are opt-in, **read-only and confined to one project** because they are meant to run against production:
 
 ```bash
 export ADO_SELFHOSTED_URL=https://tfs.contoso.com/tfs/DefaultCollection
-export ADO_SELFHOSTED_PAT=<raw-pat>          # needs Project & Team (read)
-# optional: ADO_SELFHOSTED_ORG, ADO_SELFHOSTED_INSECURE=true, ADO_SELFHOSTED_API_VERSION=7.0
+export ADO_SELFHOSTED_PAT=<raw-pat>          # use a read-only PAT scoped to the test project
+export ADO_SELFHOSTED_PROJECT=<test-project> # REQUIRED: the only project the tests may touch
+# optional: ADO_SELFHOSTED_ORG, ADO_SELFHOSTED_INSECURE=true, ADO_SELFHOSTED_API_VERSION
 npm run test:selfhosted
 ```
 
-Without `ADO_SELFHOSTED_URL` / `ADO_SELFHOSTED_PAT` the suite is skipped.
+Safeguards (`test/integration/helpers.ts`): only an allowlist of read-only tools/actions can be called, every call must target `ADO_SELFHOSTED_PROJECT` (project listing and searches are filtered on it), and the suite fails if the project variable is missing. Without `ADO_SELFHOSTED_URL` / `ADO_SELFHOSTED_PAT` the suite is skipped.
 
 ## Troubleshooting
 
