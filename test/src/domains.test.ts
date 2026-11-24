@@ -164,8 +164,8 @@ describe("DomainsManager: backward compatibility and domain enabling", () => {
     it("returns the full list of available domains", () => {
       const availableDomains = DomainsManager.getAvailableDomains();
 
-      expect(availableDomains).toEqual(["advanced-security", "pipelines", "core", "repositories", "search", "test-plans", "wiki", "work", "work-items", "mcp-apps"]);
-      expect(availableDomains.length).toBe(10);
+      expect(availableDomains).toEqual(["advanced-security", "pipelines", "core", "repositories", "search", "test-plans", "wiki", "work", "work-items"]);
+      expect(availableDomains.length).toBe(9);
     });
   });
 
@@ -248,6 +248,16 @@ describe("DomainsManager: backward compatibility and domain enabling", () => {
 
     it("returns 'all' array when undefined is provided", () => {
       const result = DomainsManager.parseDomainsInput(undefined);
+      expect(result).toEqual(["all"]);
+    });
+
+    it("returns 'all' when a whitespace-only string is provided", () => {
+      const result = DomainsManager.parseDomainsInput(" \n\t ");
+      expect(result).toEqual(["all"]);
+    });
+
+    it("returns 'all' when an empty array is provided", () => {
+      const result = DomainsManager.parseDomainsInput([]);
       expect(result).toEqual(["all"]);
     });
 

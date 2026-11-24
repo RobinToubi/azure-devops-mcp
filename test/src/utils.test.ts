@@ -2,9 +2,44 @@
 // Licensed under the MIT License.
 
 import { AlertType, AlertValidityStatus, Confidence, Severity, State } from "azure-devops-node-api/interfaces/AlertInterfaces";
-import { createEnumMapping, encodeFormattedValue, extractAdoStreamError, getEnumKeys, getOrgFromUrl, mapStringArrayToEnum, mapStringToEnum, safeEnumConvert } from "../../src/utils";
+import { createEnumMapping, encodeFormattedValue, extractAdoStreamError, getCliArgs, getEnumKeys, getOrgFromUrl, mapStringArrayToEnum, mapStringToEnum, safeEnumConvert } from "../../src/utils";
 
 describe("utils", () => {
+  describe("getCliArgs", () => {
+    it("removes the Node runtime and server script", () => {
+      const argv = ["C:\\Program Files\\nodejs\\node.exe", "C:\\mcp\\dist\\index.js", "my_org-name", "--authentication", "azcli"];
+
+      expect(getCliArgs(argv)).toEqual(["my_org-name", "--authentication", "azcli"]);
+    });
+
+    it("removes the script when an Electron host runs the server as Node", () => {
+      const argv = ["C:\\Program Files\\Microsoft VS Code\\Code.exe", "C:\\Users\\user\\extensions\\azure-devops-mcp\\dist\\index.js", "my_org-name", "--authentication", "azcli"];
+
+      expect(getCliArgs(argv)).toEqual(["my_org-name", "--authentication", "azcli"]);
+    });
+
+    it("removes the script when a bundled Electron host runs the server", () => {
+      const argv = ["C:\\Users\\user\\AppData\\Local\\Claude\\Claude.exe", "C:\\Users\\user\\AppData\\Roaming\\Claude\\Claude Extensions\\ado\\server\\index.js", "my_org-name"];
+
+      expect(getCliArgs(argv)).toEqual(["my_org-name"]);
+    });
+
+    it("returns an empty array when only the runtime and script are present", () => {
+      expect(getCliArgs(["node.exe", "dist/index.js"])).toEqual([]);
+    });
+
+    it("uses process.argv when no argument is provided", () => {
+      const originalArgv = process.argv;
+      process.argv = ["node", "dist/index.js", "my_org-name", "--authentication", "azcli"];
+
+      try {
+        expect(getCliArgs()).toEqual(["my_org-name", "--authentication", "azcli"]);
+      } finally {
+        process.argv = originalArgv;
+      }
+    });
+  });
+
   describe("createEnumMapping", () => {
     it("should create lowercase mapping for AlertType enum", () => {
       const mapping = createEnumMapping(AlertType);
@@ -553,5 +588,9 @@ describe("getOrgFromUrl", () => {
   it("returns null when no org segment is present", () => {
     expect(getOrgFromUrl("https://dev.azure.com/")).toBeNull();
     expect(getOrgFromUrl("https://dev.azure.com")).toBeNull();
+  });
+
+  it("returns null when the legacy host has no organization subdomain", () => {
+    expect(getOrgFromUrl("https://visualstudio.com")).toBeNull();
   });
 });

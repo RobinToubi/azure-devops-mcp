@@ -101,7 +101,7 @@ describe("HTTP MCP server", () => {
         headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" },
         body: JSON.stringify(INITIALIZE_REQUEST),
       });
-      const sessionId = initRes.headers.get("mcp-session-id")!;
+      const sessionId = initRes.headers.get("mcp-session-id") as string;
       expect(sessionId).toBeTruthy();
 
       // Then send initialized notification (should return 202)
@@ -174,7 +174,7 @@ describe("HTTP MCP server", () => {
         headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" },
         body: JSON.stringify(INITIALIZE_REQUEST),
       });
-      const sessionId = initRes.headers.get("mcp-session-id")!;
+      const sessionId = initRes.headers.get("mcp-session-id") as string;
 
       const ac = new AbortController();
       const getRes = await fetch(serverUrl(server), {
@@ -209,7 +209,7 @@ describe("HTTP MCP server", () => {
         headers: { "Content-Type": "application/json", "Accept": "application/json, text/event-stream" },
         body: JSON.stringify(INITIALIZE_REQUEST),
       });
-      const sessionId = initRes.headers.get("mcp-session-id")!;
+      const sessionId = initRes.headers.get("mcp-session-id") as string;
 
       const deleteRes = await fetch(serverUrl(server), {
         method: "DELETE",

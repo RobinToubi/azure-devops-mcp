@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 export let apiVersion = "7.2-preview.1";
-export let batchApiVersion = "5.0";
+export const batchApiVersion = "5.0";
 export let markdownCommentsApiVersion = "7.2-preview.4";
 
 /**
@@ -17,6 +17,20 @@ export function setApiVersions(version: string): void {
   markdownCommentsApiVersion = version.includes("preview") ? version : `${version}-preview`;
   // batchApiVersion is left at 5.0 — the $batch endpoint has been stable at that
   // version across both Azure DevOps Services and on-prem Server releases.
+}
+
+/**
+ * Returns the user-supplied CLI arguments.
+ *
+ * The server is always started script-style — `[runtime, scriptPath, ...args]` — on Node
+ * and on Electron hosts alike, so the first two entries are always dropped.
+ *
+ * Do not replace this with yargs' `hideBin`: it drops a single entry whenever
+ * `process.versions.electron` is set and `process.defaultApp` is not, so on an Electron
+ * host the script path survives and is parsed as the organization name.
+ */
+export function getCliArgs(argv: string[] = process.argv): string[] {
+  return argv.slice(2);
 }
 
 export function createEnumMapping<T extends Record<string, string | number>>(enumObject: T): Record<string, T[keyof T]> {

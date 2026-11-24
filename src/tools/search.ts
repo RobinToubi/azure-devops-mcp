@@ -4,11 +4,11 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebApi } from "azure-devops-node-api";
 import { IGitApi } from "azure-devops-node-api/GitApi.js";
+import { GitItem, VersionControlRecursionType } from "azure-devops-node-api/interfaces/GitInterfaces.js";
 import { z } from "zod";
 import { apiVersion } from "../utils.js";
 import { orgName, orgUrl, isCustomUrl } from "../config.js";
-import { VersionControlRecursionType } from "azure-devops-node-api/interfaces/GitInterfaces.js";
-import { GitItem } from "azure-devops-node-api/interfaces/GitInterfaces.js";
+import { createExternalContentResponse } from "../shared/content-safety.js";
 
 const SEARCH_TOOLS = {
   search_code: "search_code",
@@ -16,7 +16,7 @@ const SEARCH_TOOLS = {
   search_workitem: "search_workitem",
 };
 
-function configureSearchTools(server: McpServer, authHeaderProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string) {
+function configureSearchTools(server: McpServer, tokenProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string) {
   server.tool(
     SEARCH_TOOLS.search_code,
     "Search Azure DevOps Repositories for a given search text",
@@ -34,10 +34,9 @@ function configureSearchTools(server: McpServer, authHeaderProvider: () => Promi
       top: z.coerce.number().default(5).describe("Maximum number of results to return"),
     },
     async ({ searchText, project, repository, path, branch, includeFacets, skip, top }) => {
-      const authHeader = await authHeaderProvider();
+      const accessToken = await tokenProvider();
       const connection = await connectionProvider();
-      const searchBaseUrl = isCustomUrl ? orgUrl : `https://almsearch.dev.azure.com/${orgName}`;
-      const url = `${searchBaseUrl}/_apis/search/codesearchresults?api-version=${apiVersion}`;
+      const url = `${isCustomUrl ? orgUrl : `https://almsearch.dev.azure.com/${orgName}`}/_apis/search/codesearchresults?api-version=${apiVersion}`;
 
       const requestBody: Record<string, unknown> = {
         searchText,
@@ -60,7 +59,7 @@ function configureSearchTools(server: McpServer, authHeaderProvider: () => Promi
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": authHeader,
+          "Authorization": `Bearer ${accessToken}`,
           "User-Agent": userAgentProvider(),
         },
         body: JSON.stringify(requestBody),
@@ -76,15 +75,13 @@ function configureSearchTools(server: McpServer, authHeaderProvider: () => Promi
       const gitApi = await connection.getGitApi();
       const combinedResults = await fetchCombinedResults(resultJson.results ?? [], gitApi);
 
-      return {
-        content: [{ type: "text", text: resultText + JSON.stringify(combinedResults) }],
-      };
+      return createExternalContentResponse(resultText + JSON.stringify(combinedResults), "code search results");
     }
   );
 
   server.tool(
     SEARCH_TOOLS.search_wiki,
-    "Search Azure DevOps Wiki for a given search text",
+    "Search Azure DevOps Wiki for a given search text. Results include the repository path and a wiki-relative pagePath that can be used with the wiki tool.",
     {
       searchText: z.string().describe("Keywords to search for wiki pages"),
       project: z.array(z.string()).optional().describe("Filter by projects"),
@@ -94,9 +91,8 @@ function configureSearchTools(server: McpServer, authHeaderProvider: () => Promi
       top: z.coerce.number().default(10).describe("Maximum number of results to return"),
     },
     async ({ searchText, project, wiki, includeFacets, skip, top }) => {
-      const authHeader = await authHeaderProvider();
-      const searchBaseUrl = isCustomUrl ? orgUrl : `https://almsearch.dev.azure.com/${orgName}`;
-      const url = `${searchBaseUrl}/_apis/search/wikisearchresults?api-version=${apiVersion}`;
+      const accessToken = await tokenProvider();
+      const url = `${isCustomUrl ? orgUrl : `https://almsearch.dev.azure.com/${orgName}`}/_apis/search/wikisearchresults?api-version=${apiVersion}`;
 
       const requestBody: Record<string, unknown> = {
         searchText,
@@ -117,7 +113,7 @@ function configureSearchTools(server: McpServer, authHeaderProvider: () => Promi
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": authHeader,
+          "Authorization": `Bearer ${accessToken}`,
           "User-Agent": userAgentProvider(),
         },
         body: JSON.stringify(requestBody),
@@ -127,10 +123,11 @@ function configureSearchTools(server: McpServer, authHeaderProvider: () => Promi
         throw new Error(`Azure DevOps Wiki Search API error: ${response.status} ${response.statusText}`);
       }
 
-      const result = await response.text();
-      return {
-        content: [{ type: "text", text: result }],
-      };
+      const result = (await response.json()) as WikiSearchResponse;
+      const results = result.results?.map(addWikiPagePath);
+      const enrichedResult = results ? { ...result, results } : result;
+
+      return createExternalContentResponse(JSON.stringify(enrichedResult), "wiki search results");
     }
   );
 
@@ -149,9 +146,8 @@ function configureSearchTools(server: McpServer, authHeaderProvider: () => Promi
       top: z.coerce.number().default(10).describe("Number of results to return"),
     },
     async ({ searchText, project, areaPath, workItemType, state, assignedTo, includeFacets, skip, top }) => {
-      const authHeader = await authHeaderProvider();
-      const searchBaseUrl = isCustomUrl ? orgUrl : `https://almsearch.dev.azure.com/${orgName}`;
-      const url = `${searchBaseUrl}/_apis/search/workitemsearchresults?api-version=${apiVersion}`;
+      const accessToken = await tokenProvider();
+      const url = `${isCustomUrl ? orgUrl : `https://almsearch.dev.azure.com/${orgName}`}/_apis/search/workitemsearchresults?api-version=${apiVersion}`;
 
       const requestBody: Record<string, unknown> = {
         searchText,
@@ -175,7 +171,7 @@ function configureSearchTools(server: McpServer, authHeaderProvider: () => Promi
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": authHeader,
+          "Authorization": `Bearer ${accessToken}`,
           "User-Agent": userAgentProvider(),
         },
         body: JSON.stringify(requestBody),
@@ -186,9 +182,7 @@ function configureSearchTools(server: McpServer, authHeaderProvider: () => Promi
       }
 
       const result = await response.text();
-      return {
-        content: [{ type: "text", text: result }],
-      };
+      return createExternalContentResponse(result, "work item search results");
     }
   );
 }
@@ -201,7 +195,47 @@ interface SearchResult {
   [key: string]: unknown;
 }
 
+interface WikiSearchResult {
+  path?: string;
+  pagePath?: string;
+  wiki?: {
+    mappedPath?: string;
+    [key: string]: unknown;
+  };
+  [key: string]: unknown;
+}
+
+interface WikiSearchResponse {
+  results?: (WikiSearchResult | null)[];
+  [key: string]: unknown;
+}
+
 type CombinedResult = { gitItem: GitItem } | { error: string };
+
+function addWikiPagePath(result: WikiSearchResult | null): WikiSearchResult | null {
+  if (!result || result.pagePath || !result.path || !result.wiki?.mappedPath) {
+    return result;
+  }
+
+  const mappedPath = result.wiki.mappedPath === "/" ? "" : result.wiki.mappedPath.replace(/\/+$/, "");
+  if (mappedPath && result.path !== mappedPath && !result.path.startsWith(`${mappedPath}/`)) {
+    return result;
+  }
+
+  let relativePath: string;
+  try {
+    relativePath = decodeURIComponent(result.path.slice(mappedPath.length).replace(/\.md$/i, ""));
+  } catch (error) {
+    if (error instanceof URIError) {
+      return result;
+    }
+    throw error;
+  }
+
+  const pagePath = relativePath.startsWith("/") ? relativePath : `/${relativePath}`;
+
+  return { ...result, pagePath };
+}
 
 async function fetchCombinedResults(topSearchResults: SearchResult[], gitApi: IGitApi): Promise<CombinedResult[]> {
   const combinedResults: CombinedResult[] = [];
@@ -218,7 +252,7 @@ async function fetchCombinedResults(topSearchResults: SearchResult[], gitApi: IG
         continue;
       }
 
-      const versionDescriptor = changeId ? { version: changeId, versionType: 2, versionOptions: 0 } : undefined;
+      const versionDescriptor = { version: changeId, versionType: 2, versionOptions: 0 };
 
       const item = await gitApi.getItem(
         repositoryId,

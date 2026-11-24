@@ -32,7 +32,7 @@ function configureWikiTools(server: McpServer, tokenProvider: () => Promise<stri
         .describe(
           "The full URL of the wiki page. Used for get_page_content. If provided, wikiIdentifier, project, and path are ignored. Supported patterns: https://dev.azure.com/{org}/{project}/_wiki/wikis/{wikiIdentifier}?pagePath=%2FMy%20Page and https://dev.azure.com/{org}/{project}/_wiki/wikis/{wikiIdentifier}/{pageId}/Page-Title"
         ),
-      top: z.coerce.number().default(20).describe("The maximum number of pages to return. Used for list_pages. Defaults to 20."),
+      top: z.coerce.number().default(20).describe("Maximum number of pages to return for list_pages (up to 100; defaults to 20)."),
       continuationToken: z.string().optional().describe("Token for pagination to retrieve the next set of pages. Used for list_pages."),
       pageViewsForDays: z.coerce.number().optional().describe("Number of days to retrieve page views for. Used for list_pages. If not specified, page views are not included."),
       recursionLevel: z
@@ -221,7 +221,7 @@ function configureWikiTools(server: McpServer, tokenProvider: () => Promise<stri
             }
           }
 
-          if (!pageContent) {
+          if (pageContent === undefined) {
             if (!resolvedPath) {
               resolvedPath = "/";
             }
@@ -347,7 +347,7 @@ function configureWikiTools(server: McpServer, tokenProvider: () => Promise<stri
           const updateResponse = await fetch(url, {
             method: "PUT",
             headers: {
-              "Authorization": accessToken,
+              "Authorization": `Bearer ${accessToken}`,
               "Content-Type": "application/json",
               "User-Agent": userAgentProvider(),
               "If-Match": currentEtag,
@@ -410,18 +410,19 @@ function parseWikiUrl(url: string): { project: string; wikiIdentifier: string; p
     if (idx < 1 || segments[idx + 1] !== "wikis") {
       return { error: "URL does not match expected wiki pattern (missing /_wiki/wikis/ segment)." };
     }
-    const project = segments[idx - 1];
-    const wikiIdentifier = segments[idx + 2];
-    if (!project || !wikiIdentifier) {
+    const encodedProject = segments[idx - 1];
+    const encodedWikiIdentifier = segments[idx + 2];
+    if (!encodedProject || !encodedWikiIdentifier) {
       return { error: "Could not extract project or wikiIdentifier from URL." };
     }
+    const project = decodeURIComponent(encodedProject);
+    const wikiIdentifier = decodeURIComponent(encodedWikiIdentifier);
 
     // Query form with pagePath
     const pagePathParam = u.searchParams.get("pagePath");
     if (pagePathParam) {
-      let decoded = decodeURIComponent(pagePathParam);
-      if (!decoded.startsWith("/")) decoded = "/" + decoded;
-      return { project, wikiIdentifier, pagePath: decoded };
+      const pagePath = pagePathParam.startsWith("/") ? pagePathParam : `/${pagePathParam}`;
+      return { project, wikiIdentifier, pagePath };
     }
 
     // Path ID form: .../wikis/{wikiIdentifier}/{pageId}/...

@@ -5,21 +5,20 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { startHttpServer } from "./http-server.js";
 import { getBearerHandler, getPersonalAccessTokenHandler, WebApi } from "azure-devops-node-api";
 import yargs from "yargs";
-import { hideBin } from "yargs/helpers";
 
-import { createAuthenticator, getAuthorizationHeader, createPatAuthHeaderProvider } from "./auth.js";
+import { allowPatHostFromUrl, createAuthenticator, installPatFetchInterceptor, registerPatCredential } from "./auth.js";
+import { startHttpServer } from "./http-server.js";
+import { setConfig } from "./config.js";
 import { logger } from "./logger.js";
 import { getOrgTenant } from "./org-tenants.js";
 //import { configurePrompts } from "./prompts.js";
 import { configureAllTools } from "./tools.js";
 import { UserAgentComposer } from "./useragent.js";
+import { getCliArgs, setApiVersions } from "./utils.js";
 import { packageVersion } from "./version.js";
 import { DomainsManager } from "./shared/domains.js";
-import { setApiVersions } from "./utils.js";
-import { setConfig } from "./config.js";
 
 function isGitHubCodespaceEnv(): boolean {
   return process.env.CODESPACES === "true" && !!process.env.CODESPACE_NAME;
@@ -28,7 +27,7 @@ function isGitHubCodespaceEnv(): boolean {
 const defaultAuthenticationType = isGitHubCodespaceEnv() ? "azcli" : "interactive";
 
 // Parse command line arguments using yargs
-const argv = yargs(hideBin(process.argv))
+const argv = yargs(getCliArgs())
   .scriptName("mcp-server-azuredevops")
   .usage("Usage: $0 <organization> [options]")
   .version(packageVersion)
@@ -60,18 +59,17 @@ const argv = yargs(hideBin(process.argv))
   })
   .option("url", {
     alias: "u",
-    describe: "Custom Azure DevOps base URL (e.g. https://tfs.contoso.com/tfs/DefaultCollection)",
+    describe: "Custom Azure DevOps base URL for a self-hosted server (e.g. https://tfs.contoso.com/tfs/DefaultCollection). Defaults to https://dev.azure.com/<organization>.",
     type: "string",
-    default: "https://vmproddevops.val.local/tfs/DefaultCollection",
   })
   .option("insecure", {
-    describe: "Disable SSL certificate verification (for on-premises servers with self-signed certificates)",
+    describe: "Disable SSL certificate verification (on-premises servers with self-signed certificates)",
     type: "boolean",
     default: false,
   })
   .option("api-version", {
     alias: "v",
-    describe: "Azure DevOps REST API version (defaults to 7.2-preview.1)",
+    describe: "Azure DevOps REST API version (defaults to 7.2-preview.1). Use e.g. 7.0 / 6.0 for older Azure DevOps Server releases.",
     type: "string",
   })
   .option("transport", {
@@ -82,26 +80,34 @@ const argv = yargs(hideBin(process.argv))
   })
   .option("port", {
     alias: "p",
-    describe: "Port to listen on when using HTTP transport (default: 3000)",
+    describe: "Port to listen on when using HTTP transport",
     type: "number",
     default: 3000,
   })
   .option("host", {
-    describe: "Host to bind to when using HTTP transport (default: localhost)",
+    describe: "Host to bind to when using HTTP transport",
     type: "string",
     default: "localhost",
   })
   .help()
   .parseSync();
 
-const name = argv.organization as string;
-const url = (argv.url as string) || "https://dev.azure.com/" + name;
-const custom = !!argv.url;
+export const orgName = argv.organization as string;
+const customUrl = argv.url ? (argv.url as string).replace(/\/+$/, "") : undefined;
+const orgUrl = customUrl ?? "https://dev.azure.com/" + orgName;
+const isCustomUrl = !!customUrl;
 const insecure = !!argv.insecure;
 
-setConfig(name, url, custom, insecure);
-
-export { name as orgName, url as orgUrl, custom as isCustomUrl };
+setConfig(orgName, orgUrl, isCustomUrl, insecure);
+if (insecure) {
+  // Raw fetch() calls (search, wiki, ...) are not covered by the WebApi ignoreSslError option.
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
+if (isCustomUrl) {
+  // Self-hosted server: trust this host for PAT credentials.
+  allowPatHostFromUrl(orgUrl);
+}
+export { orgUrl, isCustomUrl };
 
 const domainsManager = new DomainsManager(argv.domains);
 export const enabledDomains = domainsManager.getEnabledDomains();
@@ -111,15 +117,15 @@ function getAzureDevOpsClient(getAzureDevOpsToken: () => Promise<string>, userAg
     const accessToken = await getAzureDevOpsToken();
     // For pat, accessToken is base64("{email}:{token}"). Decode to extract the token part,
     // since getPersonalAccessTokenHandler prepends ":" internally and just needs the raw token.
-    // For envvar, accessToken is a raw PAT — pass directly to getPersonalAccessTokenHandler.
+    // For envvar / request, accessToken is a raw PAT — pass it directly to getPersonalAccessTokenHandler.
     const authHandler =
       authType === "pat"
         ? getPersonalAccessTokenHandler(Buffer.from(accessToken, "base64").toString("utf8").split(":").slice(1).join(":"))
-        : authType === "envvar"
+        : authType === "envvar" || authType === "request"
           ? getPersonalAccessTokenHandler(accessToken)
           : getBearerHandler(accessToken);
     const connection = new WebApi(
-      url,
+      orgUrl,
       authHandler,
       { ignoreSslError: insecure },
       {
@@ -132,18 +138,22 @@ function getAzureDevOpsClient(getAzureDevOpsToken: () => Promise<string>, userAg
   };
 }
 
-function buildMcpServer(userAgentComposer: UserAgentComposer, authHeaderProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>): McpServer {
+function buildMcpServer(userAgentComposer: UserAgentComposer, tokenProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>): McpServer {
   const server = new McpServer({
     name: "Azure DevOps MCP Server",
     version: packageVersion,
-    icons: [{ src: "https://cdn.vsassets.io/content/icons/favicon.ico" }],
+    icons: [
+      {
+        src: "https://cdn.vsassets.io/content/icons/favicon.ico",
+      },
+    ],
   });
   server.server.oninitialized = () => {
     userAgentComposer.appendMcpClientInfo(server.server.getClientVersion());
   };
   // removing prompts until further notice
   // configurePrompts(server);
-  configureAllTools(server, authHeaderProvider, connectionProvider, () => userAgentComposer.userAgent, enabledDomains);
+  configureAllTools(server, tokenProvider, connectionProvider, () => userAgentComposer.userAgent, enabledDomains);
   return server;
 }
 
@@ -159,9 +169,12 @@ async function main() {
   }
 
   logger.info("Starting Azure DevOps MCP Server", {
-    organization: name,
-    organizationUrl: url,
+    organization: orgName,
+    organizationUrl: orgUrl,
+    selfHosted: isCustomUrl,
+    insecure,
     authentication: argv.authentication,
+    transport: argv.transport,
     tenant: argv.tenant,
     domains: argv.domains,
     enabledDomains: Array.from(enabledDomains),
@@ -176,9 +189,15 @@ async function main() {
     // No startup-time authenticator or env var is required.
     const createServerForSession = (pat?: string) => {
       const rawPat = pat ?? "";
-      const sessionAuthHeaderProvider = createPatAuthHeaderProvider(rawPat);
-      const sessionConnectionProvider = getAzureDevOpsClient(() => Promise.resolve(rawPat), userAgentComposer, "envvar");
-      return buildMcpServer(userAgentComposer, sessionAuthHeaderProvider, sessionConnectionProvider);
+      // Raw fetch() calls send "Bearer <rawPat>"; the interceptor rewrites it to "Basic base64(:rawPat)".
+      if (rawPat) {
+        registerPatCredential(rawPat, Buffer.from(`:${rawPat}`).toString("base64"));
+      }
+      return buildMcpServer(
+        userAgentComposer,
+        async () => rawPat,
+        getAzureDevOpsClient(async () => rawPat, userAgentComposer, "request")
+      );
     };
     await startHttpServer({
       port: argv.port as number,
@@ -189,41 +208,24 @@ async function main() {
     return;
   }
 
-  // All other auth types resolve credentials at startup and share them across sessions.
-  const tenantId = (await getOrgTenant(name)) ?? (argv.tenant as string);
-  const authenticator = createAuthenticator(argv.authentication as string, tenantId);
-
-  // Wrap authenticator to return a fully-formatted Authorization header value
-  // (e.g. "Bearer <token>" or "Basic <b64>") for use in raw fetch calls.
-  const authHeaderProvider = async () => {
-    const token = await authenticator();
-    return getAuthorizationHeader(argv.authentication as string, token);
-  };
+  // Azure DevOps Server has no tenant: only resolve it for Azure DevOps Services.
+  const tenantId = isCustomUrl ? (argv.tenant as string | undefined) : (argv.tenant ?? (await getOrgTenant(orgName)));
+  const authenticator = createAuthenticator(argv.authentication, tenantId);
 
   if (argv.authentication === "pat") {
     const basicValue = await authenticator();
-    // basicValue is already base64("{email}:{token}") — use it directly in the Authorization header
-    const _originalFetch = globalThis.fetch;
-    globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.headers) {
-        const headers = new Headers(init.headers as HeadersInit);
-        if (headers.get("Authorization")?.startsWith("Bearer ")) {
-          headers.set("Authorization", `Basic ${basicValue}`);
-          init = { ...init, headers };
-        }
-      }
-      return _originalFetch(input, init);
-    };
+    installPatFetchInterceptor(basicValue);
     logger.debug("PAT mode: global fetch interceptor installed to rewrite Bearer -> Basic auth headers");
+  } else if (argv.authentication === "envvar") {
+    // Raw PAT in ADO_MCP_AUTH_TOKEN: raw fetch() calls send "Bearer <rawPat>"; rewrite to Basic auth.
+    const rawPat = await authenticator();
+    registerPatCredential(rawPat, Buffer.from(`:${rawPat}`).toString("base64"));
+    logger.debug("envvar mode: global fetch interceptor installed to rewrite Bearer -> Basic auth headers");
   }
 
-  // removing prompts until further notice
-  // configurePrompts(server);
   const connectionProvider = getAzureDevOpsClient(authenticator, userAgentComposer, argv.authentication);
-
   // Factory used by both stdio (once) and HTTP (per session).
-  // In non-request auth modes the pat argument is ignored; startup-resolved credentials are used.
-  const createServerForSession = (_pat?: string) => buildMcpServer(userAgentComposer, authHeaderProvider, connectionProvider);
+  const createServerForSession = (_pat?: string) => buildMcpServer(userAgentComposer, authenticator, connectionProvider);
 
   if (argv.transport === "http") {
     await startHttpServer({

@@ -2,77 +2,85 @@
 // Licensed under the MIT License.
 
 import { AzureCliCredential, ChainedTokenCredential, DefaultAzureCredential, TokenCredential } from "@azure/identity";
-import { AccountInfo, AuthenticationResult, PublicClientApplication } from "@azure/msal-node";
-import open from "open";
 import { logger } from "./logger.js";
+import { azureDevOpsScopes, OAuthAuthenticator } from "./oauth.js";
 
-const scopes = ["499b84ac-1321-427f-aa17-267ca6975798/.default"];
+const patAllowedHosts = new Set(["dev.azure.com", "vssps.dev.azure.com", "almsearch.dev.azure.com"]);
+// Hosts explicitly trusted by the operator (e.g. an on-premises Azure DevOps Server passed with --url).
+const extraPatAllowedHosts = new Set<string>();
+// Whether plain http:// is accepted for the trusted extra hosts (on-premises servers without TLS).
+let allowInsecureHttpForExtraHosts = false;
+// Maps a Bearer header value to the Basic credential it is rewritten to; every registered PAT is rewritten this way.
+const patCredentials = new Map<string, string>();
+const interceptorMarker = Symbol.for("azure-devops-mcp.patFetchInterceptor");
 
-class OAuthAuthenticator {
-  static clientId = "0d50963b-7bb9-4fe7-94c7-a99af00b5136";
-  static defaultAuthority = "https://login.microsoftonline.com/common";
-  static zeroTenantId = "00000000-0000-0000-0000-000000000000";
+function isPatAllowedHost(hostname: string): boolean {
+  const normalizedHostname = hostname.toLowerCase();
+  return patAllowedHosts.has(normalizedHostname) || normalizedHostname.endsWith(".visualstudio.com") || extraPatAllowedHosts.has(normalizedHostname);
+}
 
-  private accountId: AccountInfo | null;
-  private publicClientApp: PublicClientApplication;
-
-  constructor(tenantId?: string) {
-    this.accountId = null;
-
-    let authority = OAuthAuthenticator.defaultAuthority;
-    if (tenantId && tenantId !== OAuthAuthenticator.zeroTenantId) {
-      authority = `https://login.microsoftonline.com/${tenantId}`;
-      logger.debug(`OAuthAuthenticator: Using tenant-specific authority for tenantId='${tenantId}'`);
-    } else {
-      logger.debug(`OAuthAuthenticator: Using default common authority`);
-    }
-
-    this.publicClientApp = new PublicClientApplication({
-      auth: {
-        clientId: OAuthAuthenticator.clientId,
-        authority,
-      },
-    });
-    logger.debug(`OAuthAuthenticator: Initialized with clientId='${OAuthAuthenticator.clientId}'`);
+/**
+ * Trusts an additional host (Azure DevOps Server) to receive PAT credentials.
+ * Only the host of the URL explicitly provided by the operator should be registered here.
+ */
+function allowPatHostFromUrl(url: string): void {
+  const parsed = new URL(url);
+  extraPatAllowedHosts.add(parsed.hostname.toLowerCase());
+  if (parsed.protocol === "http:") {
+    allowInsecureHttpForExtraHosts = true;
   }
+}
 
-  public async getToken(): Promise<string> {
-    let authResult: AuthenticationResult | null = null;
-    if (this.accountId) {
-      logger.debug(`OAuthAuthenticator: Attempting silent token acquisition for cached account`);
-      try {
-        authResult = await this.publicClientApp.acquireTokenSilent({
-          scopes,
-          account: this.accountId,
-        });
-        logger.debug(`OAuthAuthenticator: Successfully acquired token silently`);
-      } catch (error) {
-        logger.debug(`OAuthAuthenticator: Silent token acquisition failed: ${error instanceof Error ? error.message : String(error)}`);
-        authResult = null;
-      }
-    } else {
-      logger.debug(`OAuthAuthenticator: No cached account available, interactive auth required`);
-    }
-    if (!authResult) {
-      logger.debug(`OAuthAuthenticator: Starting interactive token acquisition`);
-      authResult = await this.publicClientApp.acquireTokenInteractive({
-        scopes,
-        openBrowser: async (url) => {
-          logger.debug(`OAuthAuthenticator: Opening browser for authentication`);
-          open(url);
-        },
-      });
-      this.accountId = authResult.account;
-      logger.debug(`OAuthAuthenticator: Successfully acquired token interactively, account cached`);
-    }
-
-    if (!authResult.accessToken) {
-      logger.error(`OAuthAuthenticator: Authentication result contains no access token`);
-      throw new Error("Failed to obtain Azure DevOps OAuth token.");
-    }
-    logger.debug(`OAuthAuthenticator: Token obtained successfully`);
-    return authResult.accessToken;
+function isTrustedPatDestination(requestUrl: URL): boolean {
+  if (!isPatAllowedHost(requestUrl.hostname)) {
+    return false;
   }
+  if (requestUrl.protocol === "https:") {
+    return true;
+  }
+  return requestUrl.protocol === "http:" && allowInsecureHttpForExtraHosts && extraPatAllowedHosts.has(requestUrl.hostname.toLowerCase());
+}
+
+/**
+ * Registers a credential rewritten by the fetch interceptor: requests carrying `Authorization: Bearer <bearerToken>`
+ * are sent with `Authorization: Basic <basicValue>` instead.
+ */
+function registerPatCredential(bearerToken: string, basicValue: string): void {
+  patCredentials.set(`Bearer ${bearerToken}`, basicValue);
+  installFetchInterceptor();
+}
+
+function installPatFetchInterceptor(basicValue: string): void {
+  registerPatCredential(basicValue, basicValue);
+}
+
+function installFetchInterceptor(): void {
+  // Avoid stacking wrappers when several credentials are registered (one wrapper looks them all up).
+  if ((globalThis.fetch as unknown as Record<symbol, unknown>)[interceptorMarker]) {
+    return;
+  }
+  const originalFetch = globalThis.fetch;
+
+  const interceptingFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+    const basicValue = patCredentials.get(headers.get("Authorization") ?? "");
+    if (basicValue === undefined) {
+      return originalFetch(input, init);
+    }
+
+    const requestUrl = new URL(input instanceof Request ? input.url : input.toString());
+    if (!isTrustedPatDestination(requestUrl)) {
+      throw new Error(`Refusing to send a Personal Access Token to untrusted destination '${requestUrl.origin}'`);
+    }
+
+    headers.set("Authorization", `Basic ${basicValue}`);
+    if (input instanceof Request) {
+      return originalFetch(new Request(input, { ...init, headers }));
+    }
+    return originalFetch(input, { ...init, headers });
+  };
+  (interceptingFetch as unknown as Record<symbol, unknown>)[interceptorMarker] = true;
+  globalThis.fetch = interceptingFetch as typeof fetch;
 }
 
 function createAuthenticator(type: string, tenantId?: string): () => Promise<string> {
@@ -119,7 +127,7 @@ function createAuthenticator(type: string, tenantId?: string): () => Promise<str
         credential = new ChainedTokenCredential(azureCliCredential, credential);
       }
       return async () => {
-        const result = await credential.getToken(scopes);
+        const result = await credential.getToken(azureDevOpsScopes);
         if (!result) {
           logger.error(`${type}: Failed to obtain token - credential.getToken returned null/undefined`);
           throw new Error("Failed to obtain Azure DevOps token. Ensure you have Azure CLI logged or use interactive type of authentication.");
@@ -136,22 +144,4 @@ function createAuthenticator(type: string, tenantId?: string): () => Promise<str
       };
   }
 }
-
-function getAuthorizationHeader(type: string, token: string): string {
-  if (type === "pat") {
-    // token is already base64("email:token") — use directly as Basic credential
-    return `Basic ${token}`;
-  }
-  if (type === "envvar") {
-    // token is a raw PAT — encode it for Basic auth
-    return `Basic ${Buffer.from(`:${token}`).toString("base64")}`;
-  }
-  return `Bearer ${token}`;
-}
-
-function createPatAuthHeaderProvider(rawPat: string): () => Promise<string> {
-  const header = `Basic ${Buffer.from(`:${rawPat}`).toString("base64")}`;
-  return async () => header;
-}
-
-export { createAuthenticator, getAuthorizationHeader, createPatAuthHeaderProvider };
+export { createAuthenticator, installPatFetchInterceptor, registerPatCredential, allowPatHostFromUrl };

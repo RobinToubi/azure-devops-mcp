@@ -10,14 +10,14 @@ interface IdentitiesResponse {
   value: IdentityBase[];
 }
 
-async function getCurrentUserDetails(authHeaderProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string) {
+async function getCurrentUserDetails(tokenProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string) {
   const connection = await connectionProvider();
   const url = `${connection.serverUrl}/_apis/connectionData`;
-  const authHeader = await authHeaderProvider();
+  const token = await tokenProvider();
   const response = await fetch(url, {
     method: "GET",
     headers: {
-      "Authorization": authHeader,
+      "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json",
       "User-Agent": userAgentProvider(),
     },
@@ -32,11 +32,12 @@ async function getCurrentUserDetails(authHeaderProvider: () => Promise<string>, 
 /**
  * Searches for identities using Azure DevOps Identity API
  */
-async function searchIdentities(identity: string, authHeaderProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string): Promise<IdentitiesResponse> {
-  const authHeader = await authHeaderProvider();
+async function searchIdentities(identity: string, tokenProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string): Promise<IdentitiesResponse> {
+  const token = await tokenProvider();
   const connection = await connectionProvider();
   let baseUrl: string;
   if (isCustomUrl) {
+    // Azure DevOps Server: the identities API lives on the collection URL.
     baseUrl = `${connection.serverUrl}/_apis/identities`;
   } else {
     const orgName = connection.serverUrl.split("/")[3];
@@ -51,7 +52,7 @@ async function searchIdentities(identity: string, authHeaderProvider: () => Prom
 
   const response = await fetch(`${baseUrl}?${params}`, {
     headers: {
-      "Authorization": authHeader,
+      "Authorization": `Bearer ${token}`,
       "Content-Type": "application/json",
       "User-Agent": userAgentProvider(),
     },
@@ -65,11 +66,13 @@ async function searchIdentities(identity: string, authHeaderProvider: () => Prom
   return await response.json();
 }
 
-/**
- * Gets the user ID from email or unique name using Azure DevOps Identity API
- */
-async function getUserIdFromEmail(userEmail: string, authHeaderProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string): Promise<string> {
-  const identities = await searchIdentities(userEmail, authHeaderProvider, connectionProvider, userAgentProvider);
+async function getUserIdentityFromEmail(
+  userEmail: string,
+  tokenProvider: () => Promise<string>,
+  connectionProvider: () => Promise<WebApi>,
+  userAgentProvider: () => string
+): Promise<{ id: string; displayName: string }> {
+  const identities = await searchIdentities(userEmail, tokenProvider, connectionProvider, userAgentProvider);
 
   if (!identities || identities.value?.length === 0) {
     throw new Error(`No user found with email/unique name: ${userEmail}`);
@@ -80,7 +83,15 @@ async function getUserIdFromEmail(userEmail: string, authHeaderProvider: () => P
     throw new Error(`No ID found for user with email/unique name: ${userEmail}`);
   }
 
-  return firstIdentity.id;
+  return { id: firstIdentity.id, displayName: firstIdentity.providerDisplayName ?? userEmail };
 }
 
-export { getCurrentUserDetails, getUserIdFromEmail, searchIdentities };
+/**
+ * Gets the user ID from email or unique name using Azure DevOps Identity API
+ */
+async function getUserIdFromEmail(userEmail: string, tokenProvider: () => Promise<string>, connectionProvider: () => Promise<WebApi>, userAgentProvider: () => string): Promise<string> {
+  const identity = await getUserIdentityFromEmail(userEmail, tokenProvider, connectionProvider, userAgentProvider);
+  return identity.id;
+}
+
+export { getCurrentUserDetails, getUserIdFromEmail, getUserIdentityFromEmail, searchIdentities };

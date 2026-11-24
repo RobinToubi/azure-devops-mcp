@@ -1,6 +1,6 @@
 {
   "name": "@azure-devops/mcp",
-  "version": "2.8.1",
+  "version": "2.11.1",
   "mcpName": "microsoft.com/azure-devops",
   "description": "MCP server for interacting with Azure DevOps",
   "license": "MIT",
@@ -36,20 +36,25 @@
     "format-check": "prettier --check .",
     "clean": "shx rm -rf dist",
     "test": "jest",
+    "test:selfhosted": "npm run build && jest -c jest.integration.config.cjs",
     "build-image": "docker build -t $npm_config_tag ."
   },
   "dependencies": {
-    "@azure/identity": "^4.10.0",
-    "@azure/msal-node": "^5.0.6",
-    "@modelcontextprotocol/sdk": "1.29.0",
+    "@azure/identity": "^4.13.0",
+    "@azure/logger": "^1.3.0",
+    "@azure/msal-node": "^5.5.0",
+    "@modelcontextprotocol/sdk": "1.32.0",
     "azure-devops-extension-api": "^5.272.3",
     "azure-devops-extension-sdk": "^4.0.2",
     "azure-devops-node-api": "^15.1.2",
     "express": "^5.2.1",
+    "open": "^10.2.0",
     "winston": "^3.18.3",
     "yargs": "^18.0.0",
-    "zod": "^3.25.63",
-    "zod-to-json-schema": "^3.24.5"
+    "zod": "^4.6.6"
+  },
+  "optionalDependencies": {
+    "@azure/msal-node-extensions": "^5.3.5"
   },
   "devDependencies": {
     "@types/express": "^5.0.6",
@@ -57,7 +62,7 @@
     "@types/node": "^22.19.1",
     "eslint-config-prettier": "10.1.8",
     "eslint-plugin-header": "^3.1.1",
-    "glob": "^13.0.0",
+    "glob": "^14.0.3",
     "husky": "^9.1.7",
     "jest": "^30.0.2",
     "jest-extended": "^7.0.0",
@@ -73,5 +78,9 @@
     "**/*.(js|ts|jsx|tsx|json|css|md)": [
       "npm run format"
     ]
+  },
+  "allowScripts": {
+    "keytar@7.9.0": true,
+    "@azure/msal-node-extensions@5.3.5": true
   }
 }

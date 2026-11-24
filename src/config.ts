@@ -1,14 +1,14 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-export let orgUrl: string = "";
-export let orgName: string = "";
-export let isCustomUrl: boolean = false;
-export let insecure: boolean = false;
+export let orgUrl = "";
+export let orgName = "";
+export let isCustomUrl = false;
+export let insecure = false;
 
-export function setConfig(name: string, url: string, custom: boolean, insecure: boolean) {
+export function setConfig(name: string, url: string, custom: boolean, skipTlsVerification = false) {
   orgName = name;
   orgUrl = url;
   isCustomUrl = custom;
-  insecure = insecure;
+  insecure = skipTlsVerification;
 }
